@@ -104,11 +104,33 @@ def main_cli(config, db):
 
         # Show is eligible for action
         logging.debug(f"Show '{show['title']}' eligible for action.")
+
+        # Check if we already have a TVDB ID from Tautulli's get_watch_stats call
+        tvdb_id = db.get_tvdb_id(show['id'])
+        if not tvdb_id and not args.skip_tautulli:
+            # Only fetch metadata if we didn't already get TVDB ID from get_watch_stats
+            metadata_json = tautulli._fetch_metadata(show['id'])
+            if metadata_json:
+                tvdb_id = tautulli._extract_tvdb_id(metadata_json)
+                if tvdb_id:
+                    logging.info(f"Found TVDB ID {tvdb_id} for eligible show '{show['title']}'")
+                    db.save_tvdb_id(show['id'], tvdb_id)
+
+        # Add TVDB ID to the show object if we have it
+        if tvdb_id:
+            show['tvdb_id'] = tvdb_id
+
         eligible_shows.append(show)
+
         # Insert or update eligible show in the shows table
         c = db.conn.cursor()
-        c.execute('REPLACE INTO shows (id, title, last_processed, action) VALUES (?, ?, ?, ?)',
-                  (show['id'], show['title'], int(time.time()), 'eligible'))
+        now = int(time.time())
+        if tvdb_id:
+            c.execute('REPLACE INTO shows (id, title, last_processed, action, tvdb_id) VALUES (?, ?, ?, ?, ?)',
+                     (show['id'], show['title'], now, 'eligible', tvdb_id))
+        else:
+            c.execute('REPLACE INTO shows (id, title, last_processed, action) VALUES (?, ?, ?, ?)',
+                     (show['id'], show['title'], now, 'eligible'))
     db.conn.commit()
     logging.debug(f"Recorded {len(eligible_shows)} eligible shows in the database.")
 

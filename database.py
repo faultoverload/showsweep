@@ -21,6 +21,7 @@ class DatabaseManager:
             title TEXT,
             last_modified INTEGER,
             last_processed INTEGER,
+            tvdb_id TEXT,
             action TEXT
         )''')
         c.execute('''CREATE TABLE IF NOT EXISTS actions (
@@ -29,13 +30,6 @@ class DatabaseManager:
             action TEXT,
             timestamp INTEGER
         )''')
-
-        # Add tvdb_id column if it doesn't exist
-        try:
-            c.execute("SELECT tvdb_id FROM shows LIMIT 1")
-        except sqlite3.OperationalError:
-            logging.info("Adding tvdb_id column to shows table")
-            c.execute("ALTER TABLE shows ADD COLUMN tvdb_id TEXT")
 
         self.conn.commit()
         logging.debug("Database tables ensured.")
