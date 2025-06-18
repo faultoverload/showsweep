@@ -1,0 +1,22 @@
+services:
+  showsweep:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: showsweep
+    volumes:
+      - ./config:/config
+    environment:
+      - TZ=America/New_York
+      # Uncomment and set these if you don't want to use config.ini
+      # - PLEX_URL=http://plex:32400
+      # - PLEX_TOKEN=your_plex_token
+      # - OVERSEERR_URL=http://overseerr:5055
+      # - OVERSEERR_API_KEY=your_overseerr_api_key
+      # - TAUTULLI_URL=http://tautulli:8181
+      # - TAUTULLI_API_KEY=your_tautulli_api_key
+      # - SONARR_URL=http://sonarr:8989
+      # - SONARR_API_KEY=your_sonarr_api_key
+    # Example of running with command line arguments
+    # command: python main.py --skip-confirmation --action delete
+    restart: no

@@ -19,7 +19,7 @@ cd showsweep
   source .venv/bin/activate
   pip install -r requirements.txt
   ```
-- Or use Docker (see below)
+- Or use Docker (see Docker section below)
 
 ### 3. Configure
 - Copy `config/example_config.ini` to `config/config.ini` and edit it with your server URLs, API keys, and preferences.
@@ -27,11 +27,6 @@ cd showsweep
 ### 4. Run ShowSweep
 ```sh
 python main.py [options]
-```
-
-### 5. (Optional) Use Docker
-```sh
-docker-compose up --build
 ```
 
 ---
@@ -59,6 +54,52 @@ docker-compose up --build
   ```sh
   python main.py --debug
   ```
+
+---
+
+## 🐳 Docker Usage
+
+### Using Docker Compose (Recommended)
+
+1. Create the configuration file:
+   ```sh
+   cp config/example_config.ini config/config.ini
+   ```
+
+2. Edit the configuration file:
+   ```sh
+   nano config/config.ini
+   ```
+
+3. Run with Docker Compose:
+   ```sh
+   docker-compose up -d
+   ```
+
+4. View logs:
+   ```sh
+   docker-compose logs -f
+   ```
+
+5. Run with custom arguments:
+   ```sh
+   docker-compose run --rm showsweep python main.py --debug --force-refresh
+   ```
+
+### Customizing the Docker Environment
+
+You can modify the `docker-compose.yml` file to:
+- Set environment variables instead of using config.ini
+- Change the timezone
+- Connect to an existing Docker network where your media services run
+- Configure scheduling with cron (by using the Docker host's cron)
+
+### Using Docker Without Compose
+
+```sh
+docker build -t showsweep .
+docker run -v $(pwd)/config:/config showsweep
+```
 
 ---
 
@@ -119,6 +160,7 @@ docker-compose up --build
 - [x] Safe DB transaction management
 - [x] Database repair, backup, and restore
 - [x] Configurable logging (console and file)
+- [x] Docker containerization
 
 ### Command Line Options
 - [x] `--skip-confirmation`: Non-interactive mode
