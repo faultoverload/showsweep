@@ -92,10 +92,14 @@ def main_cli(config, db):
             skipped_shows['overseerr'] += 1
             continue
 
-        if not args.skip_tautulli and tautulli.get_watch_stats(show['id']):
-            logging.info(f"Skipping show '{show['title']}' (has watch history in Tautulli)")
-            skipped_shows['tautulli'] += 1
-            continue
+        # Get watch stats and possibly TVDB ID from Tautulli
+        if not args.skip_tautulli:
+            has_watch_history, tvdb_temp = tautulli.get_watch_stats(show['id'])
+            if has_watch_history:
+                logging.info(f"Skipping show '{show['title']}' (has watch history in Tautulli)")
+                skipped_shows['tautulli'] += 1
+                continue
+            # We'll save tvdb_temp later if the show is eligible
 
         if plex.has_watch_history(show['id']):
             logging.info(f"Skipping show '{show['title']}' (has watch history in Plex)")
@@ -105,16 +109,19 @@ def main_cli(config, db):
         # Show is eligible for action
         logging.debug(f"Show '{show['title']}' eligible for action.")
 
-        # Check if we already have a TVDB ID from Tautulli's get_watch_stats call
-        tvdb_id = db.get_tvdb_id(show['id'])
+        # Use TVDB ID from Tautulli if available, otherwise fetch it
+        tvdb_id = tvdb_temp if 'tvdb_temp' in locals() and tvdb_temp else None
+
         if not tvdb_id and not args.skip_tautulli:
             # Only fetch metadata if we didn't already get TVDB ID from get_watch_stats
             metadata_json = tautulli._fetch_metadata(show['id'])
             if metadata_json:
                 tvdb_id = tautulli._extract_tvdb_id(metadata_json)
-                if tvdb_id:
-                    logging.info(f"Found TVDB ID {tvdb_id} for eligible show '{show['title']}'")
-                    db.save_tvdb_id(show['id'], tvdb_id)
+
+        # Save TVDB ID for eligible show
+        if tvdb_id:
+            logging.info(f"Found TVDB ID {tvdb_id} for eligible show '{show['title']}'")
+            db.save_tvdb_id(show['id'], tvdb_id)
 
         # Add TVDB ID to the show object if we have it
         if tvdb_id:

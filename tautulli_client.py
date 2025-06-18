@@ -138,6 +138,11 @@ class TautulliClient:
             return None
 
     def get_watch_stats(self, show_id):
+        """
+        Check if a show has watch history in Tautulli.
+        Also extracts TVDB ID if available but doesn't save it to database.
+        Returns a tuple (has_watch_history, tvdb_id) where tvdb_id may be None.
+        """
         # Don't rate limit for database operations
         now = int(time.time())
         c = self.db.conn.cursor()
@@ -149,7 +154,7 @@ class TautulliClient:
             age = now - last_checked
             logging.debug(f"[TautulliClient] Cache hit for show_id={show_id}: has_watch_history={has_watch_history}, age={age}s")
             if age < self.cache_ttl:
-                return bool(has_watch_history)
+                return bool(has_watch_history), None
             else:
                 logging.debug(f"[TautulliClient] Cache expired for show_id={show_id}, refreshing...")
         else:
@@ -189,10 +194,10 @@ class TautulliClient:
                 if metadata_json:
                     tvdb_id = self._extract_tvdb_id(metadata_json)
 
-            # Save TVDB ID if found
+            # Found TVDB ID but don't save it to shows table yet - only log it
             if tvdb_id:
                 logging.info(f"[TautulliClient] Extracted TVDB ID {tvdb_id} for show {show_id}")
-                self.db.save_tvdb_id(show_id, tvdb_id)
+                # We'll store this only for eligible shows later in the CLI
             else:
                 logging.warning(f"[TautulliClient] Could not find TVDB ID for show {show_id}")
 
@@ -204,7 +209,7 @@ class TautulliClient:
                 logging.info(f"[TautulliClient] Show {show_id} has watch history (total_plays > 0)")
             else:
                 logging.info(f"[TautulliClient] Show {show_id} has no watch history (total_plays == 0)")
-            return bool(has_watch_history)
+            return bool(has_watch_history), tvdb_id
         except Exception as e:
             logging.error(f"[TautulliClient] Error fetching watch stats from Tautulli for show_id={show_id}: {e}")
-            return False
+            return False, None
