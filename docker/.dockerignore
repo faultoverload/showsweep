@@ -1,0 +1,18 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+.vscode/
+logs/
+config/
+.git/
+.gitignore
+*.md
+*.sqlite3
+*.log
+
+# Exclude tests and docs from Docker build context
+tests/
+docs/
