@@ -113,7 +113,7 @@ def main_cli(config, db):
     # Generate summary report
     eligible_count = len(eligible_shows)
     logging.info("=" * 50)
-    logging.info(f"SHOWSWEEP REPORT")
+    logging.info("SHOWSWEEP REPORT")
     logging.info("=" * 50)
     logging.info(f"Total shows scanned: {total_shows}")
     logging.info(f"Shows skipped due to Overseerr recent requests: {skipped_shows['overseerr']}")

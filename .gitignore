@@ -14,7 +14,7 @@ venv.bak/
 .vscode/
 
 # SQLite database
-config/plex_tvpurge.db
+config/showsweep.db
 *.sqlite3
 db.sqlite3
 db.sqlite3-journal
