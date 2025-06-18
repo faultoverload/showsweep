@@ -170,3 +170,111 @@ class PlexClient:
         except Exception as e:
             logging.error(f"[PlexClient] Error checking Plex play history for show_id={show_id}: {e}")
             return False
+
+    def keep_first_season(self, show_id):
+        """
+        Keep only the first season of a show, delete all other seasons
+        """
+        self.rate_limiter.acquire()
+        try:
+            logging.info(f"Keeping only the first season for show with ratingKey={show_id}")
+            section = self.plex.library.section(self.library)
+            show = next((s for s in section.all() if str(s.ratingKey) == str(show_id)), None)
+            if not show:
+                logging.warning(f"Show with ratingKey={show_id} not found")
+                return False
+
+            # Get all seasons
+            seasons = show.seasons()
+            if not seasons:
+                logging.warning(f"No seasons found for show {show.title}")
+                return False
+
+            # Sort seasons by index
+            seasons.sort(key=lambda s: s.index)
+
+            # Keep first season, delete the rest
+            kept_season = seasons[0]
+            seasons_deleted = 0
+
+            for season in seasons:
+                if season.index != kept_season.index:
+                    logging.info(f"Deleting season {season.index} of {show.title}")
+                    try:
+                        season.delete()
+                        seasons_deleted += 1
+                    except Exception as e:
+                        logging.error(f"Error deleting season {season.index} of {show.title}: {e}")
+
+            if seasons_deleted > 0:
+                logging.info(f"Kept season {kept_season.index} and deleted {seasons_deleted} other seasons of {show.title}")
+                return True
+            else:
+                logging.info(f"Only one season exists for {show.title}, nothing to delete")
+                return True
+        except Exception as e:
+            logging.error(f"Error keeping first season for show {show_id}: {e}")
+            return False
+
+    def keep_first_episode(self, show_id):
+        """
+        Keep only the first episode of a show, delete all other episodes and seasons
+        """
+        self.rate_limiter.acquire()
+        try:
+            logging.info(f"Keeping only the first episode for show with ratingKey={show_id}")
+            section = self.plex.library.section(self.library)
+            show = next((s for s in section.all() if str(s.ratingKey) == str(show_id)), None)
+            if not show:
+                logging.warning(f"Show with ratingKey={show_id} not found")
+                return False
+
+            # Get all seasons
+            seasons = show.seasons()
+            if not seasons:
+                logging.warning(f"No seasons found for show {show.title}")
+                return False
+
+            # Sort seasons by index
+            seasons.sort(key=lambda s: s.index)
+
+            # Get episodes from first season
+            first_season = seasons[0]
+            episodes = first_season.episodes()
+
+            if not episodes:
+                logging.warning(f"No episodes found in first season of {show.title}")
+                return False
+
+            # Sort episodes by index
+            episodes.sort(key=lambda e: e.index)
+
+            # Keep first episode, delete the rest
+            kept_episode = episodes[0]
+            episodes_deleted = 0
+
+            # Delete other episodes in first season
+            for episode in episodes:
+                if episode.index != kept_episode.index:
+                    logging.info(f"Deleting episode {episode.index} of season {first_season.index} of {show.title}")
+                    try:
+                        episode.delete()
+                        episodes_deleted += 1
+                    except Exception as e:
+                        logging.error(f"Error deleting episode {episode.index} of season {first_season.index} of {show.title}: {e}")
+
+            # Delete all other seasons
+            for season in seasons:
+                if season.index != first_season.index:
+                    logging.info(f"Deleting season {season.index} of {show.title}")
+                    try:
+                        season.delete()
+                        # Don't count individual episodes for other seasons
+                    except Exception as e:
+                        logging.error(f"Error deleting season {season.index} of {show.title}: {e}")
+
+            logging.info(f"Kept episode {kept_episode.index} of season {first_season.index} and deleted {episodes_deleted} other episodes/seasons of {show.title}")
+            return True
+        except Exception as e:
+            logging.error(f"Error keeping first episode for show {show_id}: {e}")
+            return False

@@ -1,7 +1,7 @@
-# Example requirements
+# Required packages
 requests
 python-dotenv
 configparser
 plexapi
+
 # Standard library modules (argparse, sys, logging, time, threading, os, shutil, sqlite3, datetime) do not need to be listed
-# Add any additional third-party libraries below if used in the future

@@ -45,6 +45,98 @@ class TautulliClient:
         )''')
         self.db.conn.commit()
 
+    def _extract_tvdb_id(self, response_json):
+        """
+        Extract TVDB ID from Tautulli API response
+        """
+        try:
+            if 'response' not in response_json or 'data' not in response_json['response']:
+                logging.debug("No data in Tautulli response")
+                return None
+
+            data = response_json['response']['data']
+
+            # Direct guids in data (as in the example)
+            if isinstance(data, dict) and 'guids' in data and isinstance(data['guids'], list):
+                for guid in data['guids']:
+                    if isinstance(guid, str) and 'tvdb' in guid.lower():
+                        # Format: "tvdb://393206"
+                        tvdb_id = guid.split('/')[-1]
+                        if tvdb_id.isdigit():
+                            logging.debug(f"Found TVDB ID {tvdb_id} in guids array")
+                            return tvdb_id
+
+            # Look in other possible locations
+            if isinstance(data, dict):
+                # Try to find metadata
+                metadata = None
+                if 'metadata' in data:
+                    metadata = data['metadata']
+                elif 'details' in data and 'metadata' in data['details']:
+                    metadata = data['details']['metadata']
+
+                # Search metadata if found
+                if metadata:
+                    # Check for guids in metadata
+                    if 'guids' in metadata and isinstance(metadata['guids'], list):
+                        for guid in metadata['guids']:
+                            if isinstance(guid, str) and 'tvdb' in guid.lower():
+                                tvdb_id = guid.split('/')[-1]
+                                if tvdb_id.isdigit():
+                                    return tvdb_id
+
+                    # Check for external_ids
+                    if 'external_ids' in metadata and isinstance(metadata['external_ids'], dict):
+                        if 'tvdb_id' in metadata['external_ids']:
+                            return str(metadata['external_ids']['tvdb_id'])
+
+                    # Check for direct tvdbId
+                    if 'tvdbId' in metadata:
+                        return str(metadata['tvdbId'])
+
+            # If data is a list of items (like history)
+            if isinstance(data, list) and data:
+                for item in data:
+                    if isinstance(item, dict):
+                        # Check for metadata in list items
+                        if 'metadata' in item:
+                            meta = item['metadata']
+                            if 'guids' in meta and isinstance(meta['guids'], list):
+                                for guid in meta['guids']:
+                                    if isinstance(guid, str) and 'tvdb' in guid.lower():
+                                        tvdb_id = guid.split('/')[-1]
+                                        if tvdb_id.isdigit():
+                                            return tvdb_id
+
+            logging.debug(f"No TVDB ID found in Tautulli response")
+            return None
+        except Exception as e:
+            logging.error(f"Error extracting TVDB ID: {e}")
+            return None
+
+    def _fetch_metadata(self, show_id):
+        """
+        Fetch full metadata for a show from Tautulli
+        Returns the full metadata JSON or None if unsuccessful
+        """
+        self.rate_limiter.acquire()
+        try:
+            params = {
+                'apikey': self.api_key,
+                'cmd': 'get_metadata',
+                'rating_key': show_id
+            }
+            logging.debug(f"[TautulliClient] Querying Tautulli get_metadata for show_id={show_id}")
+            resp = requests.get(f"{self.url}/api/v2", params=params, timeout=10)
+            logging.debug(f"[TautulliClient] Tautulli get_metadata response status: {resp.status_code}")
+            resp.raise_for_status()
+            metadata_json = resp.json()
+            logging.debug(f"[TautulliClient] Received metadata for show_id={show_id}")
+            return metadata_json
+        except Exception as e:
+            logging.error(f"[TautulliClient] Error fetching metadata from Tautulli for show_id={show_id}: {e}")
+            return None
+
     def get_watch_stats(self, show_id):
         # Don't rate limit for database operations
         now = int(time.time())
@@ -73,12 +165,12 @@ class TautulliClient:
                 'cmd': 'get_item_watch_time_stats',
                 'rating_key': show_id
             }
-            logging.debug(f"[TautulliClient] Querying Tautulli get_item_watch_time_stats for show_id={show_id} with params={params}")
+            logging.debug(f"[TautulliClient] Querying Tautulli get_item_watch_time_stats for show_id={show_id}")
             resp = requests.get(f"{self.url}/api/v2", params=params, timeout=10)
-            logging.debug(f"[TautulliClient] Tautulli get_item_watch_time_stats response status: {resp.status_code}, response text: {resp.text}")
+            logging.debug(f"[TautulliClient] Tautulli get_item_watch_time_stats response status: {resp.status_code}")
             resp.raise_for_status()
             stats_json = resp.json()
-            logging.debug(f"[TautulliClient] Tautulli get_item_watch_time_stats response JSON: {stats_json}")
+
             # The stats are in stats_json['response']['data']
             stats = stats_json.get('response', {}).get('data', [])
             has_watch_history = 0
@@ -86,6 +178,24 @@ class TautulliClient:
                 if entry.get('total_plays', 0) > 0:
                     has_watch_history = 1
                     break
+
+            # First try to extract TVDB ID from watch stats response
+            tvdb_id = self._extract_tvdb_id(stats_json)
+
+            # If TVDB ID not found, make a separate call to get_metadata
+            if not tvdb_id:
+                logging.debug(f"[TautulliClient] TVDB ID not found in watch stats, fetching full metadata")
+                metadata_json = self._fetch_metadata(show_id)
+                if metadata_json:
+                    tvdb_id = self._extract_tvdb_id(metadata_json)
+
+            # Save TVDB ID if found
+            if tvdb_id:
+                logging.info(f"[TautulliClient] Extracted TVDB ID {tvdb_id} for show {show_id}")
+                self.db.save_tvdb_id(show_id, tvdb_id)
+            else:
+                logging.warning(f"[TautulliClient] Could not find TVDB ID for show {show_id}")
+
             # Store in cache
             c.execute('REPLACE INTO tautulli_cache (show_id, has_watch_history, last_checked) VALUES (?, ?, ?)',
                       (show_id, has_watch_history, now))

@@ -5,6 +5,7 @@ import time
 from plex_client import PlexClient
 from overseerr_client import OverseerrClient
 from tautulli_client import TautulliClient
+from sonarr_client import SonarrClient
 
 # Handles command line interface and argument parsing
 
@@ -47,7 +48,8 @@ def main_cli(config, db):
     plex = PlexClient(config, db)
     overseerr = OverseerrClient(config, db)
     tautulli = TautulliClient(config, db)
-    logging.debug("Initialized Plex, Overseerr, and Tautulli clients.")
+    sonarr = SonarrClient(config, db)
+    logging.debug("Initialized Plex, Overseerr, Tautulli, and Sonarr clients.")
 
     # Prefetch all Overseerr requests only if we're not skipping Overseerr checks
     if not args.skip_overseerr:
@@ -133,6 +135,30 @@ def main_cli(config, db):
             action = args.action or 'keep'
             logging.info(f"Applying action '{action}' to all eligible shows (skip-confirmation enabled)")
             for show in eligible_shows:
+                if action == 'delete':
+                    # Delete show in Plex
+                    if plex.delete_show(show['id']):
+                        logging.info(f"Deleted show '{show['title']}' from Plex")
+                    # Unmonitor in Sonarr
+                    if sonarr.unmonitor_series(show['id'], show.get('guid')):
+                        logging.info(f"Unmonitored show '{show['title']}' in Sonarr")
+                elif action == 'keep_first_season':
+                    # Keep only first season in Plex
+                    if plex.keep_first_season(show['id']):
+                        logging.info(f"Kept only first season of '{show['title']}' in Plex")
+                    # Unmonitor in Sonarr
+                    if sonarr.unmonitor_series(show['id'], show.get('guid')):
+                        logging.info(f"Unmonitored show '{show['title']}' in Sonarr")
+                elif action == 'keep_first_episode':
+                    # Keep only first episode in Plex
+                    if plex.keep_first_episode(show['id']):
+                        logging.info(f"Kept only first episode of '{show['title']}' in Plex")
+                    # Unmonitor in Sonarr
+                    if sonarr.unmonitor_series(show['id'], show.get('guid')):
+                        logging.info(f"Unmonitored show '{show['title']}' in Sonarr")
+                else:  # keep
+                    logging.info(f"Keeping show '{show['title']}' as is")
+
                 db.record_action(show['id'], action)
                 logging.info(f"Action '{action}' applied to show: {show['title']}")
         else:
@@ -147,12 +173,31 @@ def main_cli(config, db):
                 choice = input("Enter choice [1-4, default=4]: ").strip()
                 if choice == '1':
                     action = 'delete'
+                    # Delete show in Plex
+                    if plex.delete_show(show['id']):
+                        logging.info(f"Deleted show '{show['title']}' from Plex")
+                    # Unmonitor in Sonarr
+                    if sonarr.unmonitor_series(show['id'], show.get('guid')):
+                        logging.info(f"Unmonitored show '{show['title']}' in Sonarr")
                 elif choice == '2':
                     action = 'keep_first_season'
+                    # Keep only first season in Plex
+                    if plex.keep_first_season(show['id']):
+                        logging.info(f"Kept only first season of '{show['title']}' in Plex")
+                    # Unmonitor in Sonarr
+                    if sonarr.unmonitor_series(show['id'], show.get('guid')):
+                        logging.info(f"Unmonitored show '{show['title']}' in Sonarr")
                 elif choice == '3':
                     action = 'keep_first_episode'
+                    # Keep only first episode in Plex
+                    if plex.keep_first_episode(show['id']):
+                        logging.info(f"Kept only first episode of '{show['title']}' in Plex")
+                    # Unmonitor in Sonarr
+                    if sonarr.unmonitor_series(show['id'], show.get('guid')):
+                        logging.info(f"Unmonitored show '{show['title']}' in Sonarr")
                 else:
                     action = 'keep'
+                    logging.info(f"Keeping show '{show['title']}' as is")
                 db.record_action(show['id'], action)
                 logging.info(f"Action '{action}' applied to show: {show['title']}")
 
