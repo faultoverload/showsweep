@@ -86,6 +86,24 @@ python main.py [options]
    docker-compose run --rm showsweep python main.py --debug --force-refresh
    ```
 
+### Using the Published Docker Image
+
+You can run ShowSweep directly from Docker Hub without building locally:
+
+```sh
+docker run --rm -v $(pwd)/config:/config -v $(pwd)/logs:/logs \
+  -e TZ=America/New_York \
+  faultoverload/showsweep:latest
+```
+
+You can also pass command line arguments:
+
+```sh
+docker run --rm -v $(pwd)/config:/config -v $(pwd)/logs:/logs \
+  -e TZ=America/New_York \
+  faultoverload/showsweep:latest --skip-confirmation --action delete
+```
+
 ### Customizing the Docker Environment
 
 You can modify the `docker-compose.yml` file to:
