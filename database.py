@@ -22,6 +22,8 @@ class DatabaseManager:
             last_modified INTEGER,
             last_processed INTEGER,
             tvdb_id TEXT,
+            disk_space_bytes INTEGER,
+            disk_space_formatted TEXT,
             action TEXT
         )''')
         c.execute('''CREATE TABLE IF NOT EXISTS actions (
@@ -30,6 +32,15 @@ class DatabaseManager:
             action TEXT,
             timestamp INTEGER
         )''')
+
+        # Add disk space columns if they don't exist
+        try:
+            # Check if disk_space_bytes column exists
+            c.execute("SELECT disk_space_bytes FROM shows LIMIT 1")
+        except sqlite3.OperationalError:
+            logging.info("Adding disk space columns to shows table")
+            c.execute("ALTER TABLE shows ADD COLUMN disk_space_bytes INTEGER")
+            c.execute("ALTER TABLE shows ADD COLUMN disk_space_formatted TEXT")
 
         self.conn.commit()
         logging.debug("Database tables ensured.")
@@ -77,6 +88,21 @@ class DatabaseManager:
         except Exception as e:
             logging.error(f"Error retrieving TVDB ID for show {show_id}: {e}")
             return None
+
+    def save_disk_space(self, show_id, disk_space_bytes, disk_space_formatted):
+        """
+        Store the disk space information for a show
+        """
+        try:
+            c = self.conn.cursor()
+            c.execute('UPDATE shows SET disk_space_bytes = ?, disk_space_formatted = ? WHERE id = ?',
+                     (disk_space_bytes, disk_space_formatted, show_id))
+            # If show doesn't exist yet, don't insert (should never happen as this is called after show record exists)
+            self.conn.commit()
+            return True
+        except Exception as e:
+            logging.error(f"Error saving disk space info for show {show_id}: {e}")
+            return False
 
     def repair(self):
         # Simple integrity check

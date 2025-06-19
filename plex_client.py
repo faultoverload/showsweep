@@ -85,14 +85,18 @@ class PlexClient:
                 except Exception as e:
                     logging.error(f"Error checking seasons/episodes for {show.title}: {e}")
 
-                result.append({
+                # Create show object
+                show_obj = {
                     'id': show.ratingKey,
                     'title': show.title,
                     'year': getattr(show, 'year', None),
                     'guid': getattr(show, 'guid', None),
                     'has_only_first_season': has_only_first_season,
                     'has_only_first_episode': has_only_first_episode
-                })
+                }
+
+                # Calculate disk space for the show (deferred to be calculated on demand)
+                result.append(show_obj)
             return result
         except Exception as e:
             logging.error(f"Error fetching shows from Plex: {e}")
@@ -278,3 +282,50 @@ class PlexClient:
         except Exception as e:
             logging.error(f"Error keeping first episode for show {show_id}: {e}")
             return False
+
+    def get_show_disk_space(self, show_id):
+        """
+        Calculate the total disk space used by a show in bytes
+        Returns a tuple of (total_size, formatted_size)
+        """
+        self.rate_limiter.acquire()
+        try:
+            logging.debug(f"Calculating disk space for show with ratingKey={show_id}")
+            section = self.plex.library.section(self.library)
+            show = next((s for s in section.all() if str(s.ratingKey) == str(show_id)), None)
+            if not show:
+                logging.warning(f"Show with ratingKey={show_id} not found for disk space calculation")
+                return 0, "0 MB"
+
+            total_size = 0
+
+            # Get all episodes for this show
+            for episode in show.episodes():
+                # Each episode can have multiple media versions (different qualities, formats)
+                for media in episode.media:
+                    # Each media can have multiple parts (files)
+                    for part in media.parts:
+                        # Add the file size
+                        if hasattr(part, 'size') and part.size:
+                            total_size += part.size
+
+            # Format the size for display
+            formatted_size = self._format_size(total_size)
+            logging.debug(f"Show {show.title} uses {formatted_size} of disk space")
+            return total_size, formatted_size
+        except Exception as e:
+            logging.error(f"Error calculating disk space for show {show_id}: {e}")
+            return 0, "0 MB"
+
+    def _format_size(self, size_bytes):
+        """Format bytes into human-readable format"""
+        if size_bytes < 1024:
+            return f"{size_bytes} B"
+        elif size_bytes < 1024 ** 2:
+            return f"{size_bytes / 1024:.1f} KB"
+        elif size_bytes < 1024 ** 3:
+            return f"{size_bytes / (1024 ** 2):.1f} MB"
+        elif size_bytes < 1024 ** 4:
+            return f"{size_bytes / (1024 ** 3):.1f} GB"
+        else:
+            return f"{size_bytes / (1024 ** 4):.1f} TB"

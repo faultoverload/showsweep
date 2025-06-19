@@ -118,12 +118,18 @@ def main_cli(config, db):
             if metadata_json:
                 tvdb_id = tautulli._extract_tvdb_id(metadata_json)
 
+        # Calculate disk space used by the show
+        disk_space_bytes, disk_space_formatted = plex.get_show_disk_space(show['id'])
+        logging.info(f"Show '{show['title']}' uses {disk_space_formatted} of disk space")
+
         # Save TVDB ID for eligible show
         if tvdb_id:
             logging.info(f"Found TVDB ID {tvdb_id} for eligible show '{show['title']}'")
             db.save_tvdb_id(show['id'], tvdb_id)
 
-        # Add TVDB ID to the show object if we have it
+        # Add disk space and TVDB ID to the show object
+        show['disk_space_bytes'] = disk_space_bytes
+        show['disk_space_formatted'] = disk_space_formatted
         if tvdb_id:
             show['tvdb_id'] = tvdb_id
 
@@ -133,11 +139,11 @@ def main_cli(config, db):
         c = db.conn.cursor()
         now = int(time.time())
         if tvdb_id:
-            c.execute('REPLACE INTO shows (id, title, last_processed, action, tvdb_id) VALUES (?, ?, ?, ?, ?)',
-                     (show['id'], show['title'], now, 'eligible', tvdb_id))
+            c.execute('REPLACE INTO shows (id, title, last_processed, action, tvdb_id, disk_space_bytes, disk_space_formatted) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                     (show['id'], show['title'], now, 'eligible', tvdb_id, disk_space_bytes, disk_space_formatted))
         else:
-            c.execute('REPLACE INTO shows (id, title, last_processed, action) VALUES (?, ?, ?, ?)',
-                     (show['id'], show['title'], now, 'eligible'))
+            c.execute('REPLACE INTO shows (id, title, last_processed, action, disk_space_bytes, disk_space_formatted) VALUES (?, ?, ?, ?, ?, ?)',
+                     (show['id'], show['title'], now, 'eligible', disk_space_bytes, disk_space_formatted))
     db.conn.commit()
     logging.debug(f"Recorded {len(eligible_shows)} eligible shows in the database.")
 
@@ -154,10 +160,21 @@ def main_cli(config, db):
 
     if eligible_count > 0:
         logging.info("\nEligible shows:")
-        logging.info("-" * 50)
+        logging.info("-" * 70)
+        logging.info(f"{'#':<3} {'Title':<40} {'Year':<6} {'Size':<10}")
+        logging.info("-" * 70)
+
+        # Calculate total disk space used by eligible shows
+        total_bytes = sum(show.get('disk_space_bytes', 0) for show in eligible_shows)
+        formatted_total = plex._format_size(total_bytes)
+
         for i, show in enumerate(eligible_shows, 1):
-            year = f" ({show['year']})" if show.get('year') else ""
-            logging.info(f"{i}. {show['title']}{year}")
+            year = f"{show.get('year', '')}" if show.get('year') else "-"
+            size = show.get('disk_space_formatted', '-')
+            logging.info(f"{i:<3} {show['title'][:38]:<40} {year:<6} {size:<10}")
+
+        logging.info("-" * 70)
+        logging.info(f"Total disk space used by eligible shows: {formatted_total}")
 
         if args.skip_confirmation:
             # Non-interactive: apply the action flag to all eligible shows

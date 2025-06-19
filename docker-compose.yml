@@ -6,6 +6,7 @@ services:
     container_name: showsweep
     volumes:
       - ./config:/config
+      - ./logs:/logs  # Persist logs outside the container
     environment:
       - TZ=America/New_York
       # Uncomment and set these if you don't want to use config.ini
