@@ -15,6 +15,7 @@ class DatabaseManager:
     def setup(self):
         self.conn = sqlite3.connect(self.db_path)
         c = self.conn.cursor()
+        c.execute("PRAGMA journal_mode=WAL;")
         # Create tables if not exist
         c.execute('''CREATE TABLE IF NOT EXISTS shows (
             id TEXT PRIMARY KEY,
