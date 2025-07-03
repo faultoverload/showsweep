@@ -1,9 +1,7 @@
 services:
   showsweep:
-    build:
-      context: .
-      dockerfile: Dockerfile
     container_name: showsweep
+    image: faultoverload/showsweep:latest
     volumes:
       - ./config:/config
       - ./logs:/logs  # Persist logs outside the container
