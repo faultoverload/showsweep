@@ -1,5 +1,9 @@
 name: Create Release on Merge to Main
 
+# Add write permissions for contents
+permissions:
+  contents: write
+
 on:
   push:
     branches:
@@ -32,5 +36,3 @@ jobs:
           name: Release ${{ steps.tag_version.outputs.new_tag }}
           body: ${{ steps.tag_version.outputs.changelog }}
           generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
