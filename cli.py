@@ -2,10 +2,27 @@ import argparse
 import sys
 import logging
 import time
+import sqlite3
 from plex_client import PlexClient
 from overseerr_client import OverseerrClient
 from tautulli_client import TautulliClient
 from sonarr_client import SonarrClient
+
+
+def safe_execute(cursor, query, params, retries=5, delay=0.2):
+    """Execute a SQLite query with retry logic for locked database errors."""
+    for attempt in range(retries):
+        try:
+            cursor.execute(query, params)
+            return
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e):
+                time.sleep(delay)
+            else:
+                raise
+    raise RuntimeError(
+        "Failed to write to database after multiple retries due to locking."
+    )
 
 # Handles command line interface and argument parsing
 
@@ -139,11 +156,32 @@ def main_cli(config, db):
         c = db.conn.cursor()
         now = int(time.time())
         if tvdb_id:
-            c.execute('REPLACE INTO shows (id, title, last_processed, action, tvdb_id, disk_space_bytes, disk_space_formatted) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                     (show['id'], show['title'], now, 'eligible', tvdb_id, disk_space_bytes, disk_space_formatted))
+            safe_execute(
+                c,
+                'REPLACE INTO shows (id, title, last_processed, action, tvdb_id, disk_space_bytes, disk_space_formatted) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                (
+                    show['id'],
+                    show['title'],
+                    now,
+                    'eligible',
+                    tvdb_id,
+                    disk_space_bytes,
+                    disk_space_formatted,
+                ),
+            )
         else:
-            c.execute('REPLACE INTO shows (id, title, last_processed, action, disk_space_bytes, disk_space_formatted) VALUES (?, ?, ?, ?, ?, ?)',
-                     (show['id'], show['title'], now, 'eligible', disk_space_bytes, disk_space_formatted))
+            safe_execute(
+                c,
+                'REPLACE INTO shows (id, title, last_processed, action, disk_space_bytes, disk_space_formatted) VALUES (?, ?, ?, ?, ?, ?)',
+                (
+                    show['id'],
+                    show['title'],
+                    now,
+                    'eligible',
+                    disk_space_bytes,
+                    disk_space_formatted,
+                ),
+            )
     db.conn.commit()
     logging.debug(f"Recorded {len(eligible_shows)} eligible shows in the database.")
 
