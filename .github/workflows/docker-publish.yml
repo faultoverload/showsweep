@@ -21,7 +21,14 @@ jobs:
 
       - name: Extract version from GitHub ref
         id: extract_version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        run: |
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            # Strip "refs/tags/" prefix from tag
+            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          else
+            # If not a tag (e.g. manual workflow dispatch), use "latest" only
+            echo "VERSION=latest" >> $GITHUB_OUTPUT
+          fi
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
@@ -36,6 +43,6 @@ jobs:
           push: true
           tags: |
             faultoverload/showsweep:latest
-            faultoverload/showsweep:${{ steps.extract_version.outputs.VERSION }}
+            ${{ steps.extract_version.outputs.VERSION != 'latest' && format('faultoverload/showsweep:{0}', steps.extract_version.outputs.VERSION) || '' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
